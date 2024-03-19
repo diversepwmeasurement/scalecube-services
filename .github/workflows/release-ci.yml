@@ -1,82 +1,100 @@
-name: Release CI
-
-on:
-  release:
-    types: [released]
-
 jobs:
   build:
     name: Release CI
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-      - run: git checkout ${{ github.event.release.target_commitish }}
-      - uses: actions/cache@v1
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
-      - name: Set up Java for publishing to GitHub Packages
-        uses: actions/setup-java@v1
-        with:
-          java-version: 1.8
-          server-id: github
-          server-username: GITHUB_ACTOR
-          server-password: GITHUB_TOKEN
-      - name: Maven Build
-        run: mvn clean install -DskipTests=true -Ddockerfile.skip=true -B -V
-        env:
-          GITHUB_TOKEN: ${{ secrets.ORGANIZATION_TOKEN }}
-      - name: Maven Verify
-        run: |
-          sudo echo "127.0.0.1 $(eval hostname)" | sudo tee -a /etc/hosts
-          mvn verify -B
-      - name: Configure git
-        run: |
-          git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
-          git config --global user.name "${GITHUB_ACTOR}"
-      - name: Prepare release
-        id: prepare_release
-        run: |
-          mvn -B build-helper:parse-version release:prepare \
-            -DreleaseVersion=\${parsedVersion.majorVersion}.\${parsedVersion.minorVersion}.\${parsedVersion.incrementalVersion} \
-            -Darguments="-DskipTests=true -Ddockerfile.skip=true"
-          echo ::set-output name=release_tag::$(git describe --tags --abbrev=0)
-      - name: Perform release
-        run: mvn -B release:perform -Pdeploy2Github -Darguments="-DskipTests=true -Ddockerfile.skip=true -Pdeploy2Github"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ secrets.GITHUB_REPOSITORY }}
-      - name: Set up Java for publishing to Maven Central Repository
-        uses: actions/setup-java@v1
-        with:
-          java-version: 1.8
-          server-id: ossrh
-          server-username: MAVEN_USERNAME
-          server-password: MAVEN_PASSWORD
-          gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
-          gpg-passphrase: MAVEN_GPG_PASSPHRASE
-      - name: Deploy release version to the Maven Central Repository
-        run: |
-          release_version=$(echo ${{ steps.prepare_release.outputs.release_tag }} | sed "s/release-//")
-          echo release version $release_version
-          mvn versions:set -DnewVersion=$release_version -DgenerateBackupPoms=false
-          mvn versions:commit
-          mvn deploy -Pdeploy2Maven -DskipTests -B -V
-        env:
-          MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
-          MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
-          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
-      - name: Rollback release
-        if: failure()
-        run: |
-          mvn release:rollback || echo "nothing to rollback"
-          git push origin :refs/tags/${{ github.event.release.tag_name }}
-          if [ ! -z "${{ steps.prepare_release.outputs.release_tag }}" ]
-          then
-            git tag -d ${{ steps.prepare_release.outputs.release_tag }}
-            git push origin :refs/tags/${{ steps.prepare_release.outputs.release_tag }}
-          fi
+    - continue-on-error: true
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - continue-on-error: true
+      run: git checkout ${{ github.event.release.target_commitish }}
+    - continue-on-error: true
+      uses: actions/cache@v1
+      with:
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        path: ~/.m2/repository
+        restore-keys: '${{ runner.os }}-maven-
+
+          '
+    - continue-on-error: true
+      name: Set up Java for publishing to GitHub Packages
+      uses: actions/setup-java@v1
+      with:
+        java-version: 1.8
+        server-id: github
+        server-password: GITHUB_TOKEN
+        server-username: GITHUB_ACTOR
+    - continue-on-error: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.ORGANIZATION_TOKEN }}
+      name: Maven Build
+      run: mvn clean install -DskipTests=true -Ddockerfile.skip=true -B -V
+    - continue-on-error: true
+      name: Maven Verify
+      run: 'sudo echo "127.0.0.1 $(eval hostname)" | sudo tee -a /etc/hosts
+
+        mvn verify -B
+
+        '
+    - continue-on-error: true
+      name: Configure git
+      run: 'git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+
+        git config --global user.name "${GITHUB_ACTOR}"
+
+        '
+    - continue-on-error: true
+      id: prepare_release
+      name: Prepare release
+      run: "mvn -B build-helper:parse-version release:prepare \\\n  -DreleaseVersion=\\\
+        ${parsedVersion.majorVersion}.\\${parsedVersion.minorVersion}.\\${parsedVersion.incrementalVersion}\
+        \ \\\n  -Darguments=\"-DskipTests=true -Ddockerfile.skip=true\"\necho ::set-output\
+        \ name=release_tag::$(git describe --tags --abbrev=0)\n"
+    - continue-on-error: true
+      env:
+        GITHUB_REPOSITORY: ${{ secrets.GITHUB_REPOSITORY }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      name: Perform release
+      run: mvn -B release:perform -Pdeploy2Github -Darguments="-DskipTests=true -Ddockerfile.skip=true
+        -Pdeploy2Github"
+    - continue-on-error: true
+      name: Set up Java for publishing to Maven Central Repository
+      uses: actions/setup-java@v1
+      with:
+        gpg-passphrase: MAVEN_GPG_PASSPHRASE
+        gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+        java-version: 1.8
+        server-id: ossrh
+        server-password: MAVEN_PASSWORD
+        server-username: MAVEN_USERNAME
+    - continue-on-error: true
+      env:
+        MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+        MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+      name: Deploy release version to the Maven Central Repository
+      run: 'release_version=$(echo ${{ steps.prepare_release.outputs.release_tag }}
+        | sed "s/release-//")
+
+        echo release version $release_version
+
+        mvn versions:set -DnewVersion=$release_version -DgenerateBackupPoms=false
+
+        mvn versions:commit
+
+        mvn deploy -Pdeploy2Maven -DskipTests -B -V
+
+        '
+    - continue-on-error: true
+      if: failure()
+      name: Rollback release
+      run: "mvn release:rollback || echo \"nothing to rollback\"\ngit push origin\
+        \ :refs/tags/${{ github.event.release.tag_name }}\nif [ ! -z \"${{ steps.prepare_release.outputs.release_tag\
+        \ }}\" ]\nthen\n  git tag -d ${{ steps.prepare_release.outputs.release_tag\
+        \ }}\n  git push origin :refs/tags/${{ steps.prepare_release.outputs.release_tag\
+        \ }}\nfi\n"
+name: Release CI
+on:
+  repository_dispatch:
+    types: trigger-ga___release-ci.yml

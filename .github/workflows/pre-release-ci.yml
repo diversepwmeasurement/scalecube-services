@@ -1,58 +1,75 @@
-name: Pre-release CI
-
-on:
-  release:
-    types: [prereleased]
-
 jobs:
   build:
     name: Pre-release CI
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/cache@v1
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
-      - name: Set up Java for publishing to GitHub Packages
-        uses: actions/setup-java@v1
-        with:
-          java-version: 1.8
-          server-id: github
-          server-username: GITHUB_ACTOR
-          server-password: GITHUB_TOKEN
-      - name: Deploy pre-release version to GitHub Packages
-        run: |
-          sudo echo "127.0.0.1 $(eval hostname)" | sudo tee -a /etc/hosts
-          pre_release_version=${{ github.event.release.tag_name }}
-          echo Pre-release version $pre_release_version
-          mvn versions:set -DnewVersion=$pre_release_version -DgenerateBackupPoms=false
-          mvn versions:commit
-          mvn clean deploy -Pdeploy2Github -B -V
-        env:
-          GITHUB_TOKEN: ${{ secrets.ORGANIZATION_TOKEN }}
-      - name: Set up Java for publishing to Maven Central Repository
-        uses: actions/setup-java@v1
-        with:
-          java-version: 1.8
-          server-id: ossrh
-          server-username: MAVEN_USERNAME
-          server-password: MAVEN_PASSWORD
-          gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
-          gpg-passphrase: MAVEN_GPG_PASSPHRASE
-      - name: Deploy pre-release version to the Maven Central Repository
-        run: |
-          pre_release_version=${{ github.event.release.tag_name }}
-          echo Pre-release version $pre_release_version
-          mvn versions:set -DnewVersion=$pre_release_version -DgenerateBackupPoms=false
-          mvn versions:commit
-          mvn deploy -Pdeploy2Maven -DskipTests -B -V
-        env:
-          MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
-          MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
-          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
-      - name: Rollback pre-release (remove tag)
-        if: failure()
-        run: git push origin :refs/tags/${{ github.event.release.tag_name }}
+    - continue-on-error: true
+      uses: actions/checkout@v2
+    - continue-on-error: true
+      uses: actions/cache@v1
+      with:
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        path: ~/.m2/repository
+        restore-keys: '${{ runner.os }}-maven-
+
+          '
+    - continue-on-error: true
+      name: Set up Java for publishing to GitHub Packages
+      uses: actions/setup-java@v1
+      with:
+        java-version: 1.8
+        server-id: github
+        server-password: GITHUB_TOKEN
+        server-username: GITHUB_ACTOR
+    - continue-on-error: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.ORGANIZATION_TOKEN }}
+      name: Deploy pre-release version to GitHub Packages
+      run: 'sudo echo "127.0.0.1 $(eval hostname)" | sudo tee -a /etc/hosts
+
+        pre_release_version=${{ github.event.release.tag_name }}
+
+        echo Pre-release version $pre_release_version
+
+        mvn versions:set -DnewVersion=$pre_release_version -DgenerateBackupPoms=false
+
+        mvn versions:commit
+
+        mvn clean deploy -Pdeploy2Github -B -V
+
+        '
+    - continue-on-error: true
+      name: Set up Java for publishing to Maven Central Repository
+      uses: actions/setup-java@v1
+      with:
+        gpg-passphrase: MAVEN_GPG_PASSPHRASE
+        gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+        java-version: 1.8
+        server-id: ossrh
+        server-password: MAVEN_PASSWORD
+        server-username: MAVEN_USERNAME
+    - continue-on-error: true
+      env:
+        MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+        MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+      name: Deploy pre-release version to the Maven Central Repository
+      run: 'pre_release_version=${{ github.event.release.tag_name }}
+
+        echo Pre-release version $pre_release_version
+
+        mvn versions:set -DnewVersion=$pre_release_version -DgenerateBackupPoms=false
+
+        mvn versions:commit
+
+        mvn deploy -Pdeploy2Maven -DskipTests -B -V
+
+        '
+    - continue-on-error: true
+      if: failure()
+      name: Rollback pre-release (remove tag)
+      run: git push origin :refs/tags/${{ github.event.release.tag_name }}
+name: Pre-release CI
+on:
+  repository_dispatch:
+    types: trigger-ga___pre-release-ci.yml
